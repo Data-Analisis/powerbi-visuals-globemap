@@ -34,8 +34,8 @@ module powerbi.extensibility.geocoder {
 
     export interface IGeocodingCache {
         getCoordinates(key: string): JQueryPromise<{}>;
-        registerCoordinates(key: string, coordinate: IGeocodeCoordinate): void;
-        registerCoordinates(key: string, coordinate: IGeocodeBoundaryCoordinate): void;
+        registerCoordinates(key: string, coordinate: IGeocodeCoordinate): JQueryPromise<{}>;
+        registerCoordinates(key: string, coordinate: IGeocodeBoundaryCoordinate): JQueryPromise<{}>;
     }
 
     export function createGeocodingCache(maxCacheSize: number, maxCacheSizeOverflow: number): IGeocodingCache {
@@ -81,8 +81,10 @@ module powerbi.extensibility.geocoder {
                 return deferred.resolve(result);
             }
             // Check local storage cache
+            //debugger;
             const localStoragePromise: IPromise<string> = this.localStorageService.get(GeocodingCache.TILE_LOCATIONS);
             localStoragePromise.then((value) => {
+                // debugger;
                 const parsedValue = JSON.parse(value);
                 if (!parsedValue) {
                     return deferred.resolve(result);
@@ -98,10 +100,11 @@ module powerbi.extensibility.geocoder {
                         }
                     } as GeocodeCacheEntry;
 
-                    const shortParsedKey: string = GeocodingCache.getShortKey(parsedKey);
-                    this.registerInMemory(shortParsedKey, pair.coordinate);
+                    //const shortParsedKey: string = GeocodingCache.getShortKey(parsedKey);
+                    //this.registerInMemory(parsedKey, pair.coordinate);
 
                     if (parsedKey === shortKey) {
+                        this.registerInMemory(parsedKey, pair.coordinate);
                         result = pair.coordinate;
                         deferred.resolve(result);
                     }
@@ -116,9 +119,19 @@ module powerbi.extensibility.geocoder {
         /**
         * Registers the query and coordinate to the cache.
         */
-        public registerCoordinates(key: string, coordinate: IGeocodeCoordinate): void {
-            this.registerInMemory(key, coordinate);
-            this.registerInStorage(key, coordinate);
+        public registerCoordinates(key: string, coordinate: IGeocodeCoordinate): JQueryPromise<{}> {
+            const deferred = $.Deferred();
+            const shortKey: string = GeocodingCache.getShortKey(key);
+            // debugger;
+            this.registerInMemory(shortKey, coordinate);
+            this.registerInStorage(shortKey, coordinate).then(() => {
+                deferred.resolve();
+            })
+                .fail(() => {
+                    deferred.reject();
+                });
+
+            return deferred;
         }
 
         private registerInMemory(key: string, coordinate: IGeocodeCoordinate): void {
@@ -161,27 +174,53 @@ module powerbi.extensibility.geocoder {
                 this.geocodeCacheCount = maxCacheSize;
             }
 
+            // debugger;
             geocodeCache[key] = { coordinate: coordinate, hitCount: 1 };
             ++this.geocodeCacheCount;
         }
 
         private registerInStorage(key: string, coordinate: IGeocodeCoordinate): JQueryPromise<{}> {
-            const valuesObj = {};
-            const shortKey: string = GeocodingCache.getShortKey(key);
+            let valuesObj = {};
             let deferred = $.Deferred();
-            valuesObj[shortKey] = {
+            valuesObj[key] = {
                 "lon": coordinate.longitude,
                 "lat": coordinate.latitude
             };
             let valueObjectToString: string = JSON.stringify(valuesObj);
-            this.localStorageService.get(GeocodingCache.TILE_LOCATIONS).then((data) => {
+            // debugger;
+            this.localStorageService.get(GeocodingCache.TILE_LOCATIONS).then((data = null) => {
+                // debugger;
+                if (!data) {
+                    valueObjectToString = JSON.stringify(valuesObj);
+                    this.localStorageService.set(GeocodingCache.TILE_LOCATIONS, valueObjectToString);
+                    return deferred.resolve();
+                }
+
                 const locations = JSON.parse(data);
                 const mergedObject = location ? _.extend(locations, valuesObj) : valuesObj;
                 valueObjectToString = JSON.stringify(mergedObject);
-                this.localStorageService.set(GeocodingCache.TILE_LOCATIONS, valueObjectToString);
-                deferred.resolve();
+                this.localStorageService.set(GeocodingCache.TILE_LOCATIONS, valueObjectToString)
+                    .then(() => {
+                        deferred.resolve();
+                    })
+                    .catch(() => {
+                        deferred.reject();
+                    });
             }).catch(() => {
-                this.localStorageService.set(GeocodingCache.TILE_LOCATIONS, valueObjectToString).then(() => deferred.resolve("success")).catch(() => deferred.reject());
+                // for each value in cache create create record
+                // valuesObj = {};
+                // for (let cacheKey in this.geocodeCache) {
+                //     valuesObj[cacheKey] = {
+                //         "lon": this.geocodeCache[cacheKey].coordinate.longitude,
+                //         "lat": this.geocodeCache[cacheKey].coordinate.latitude
+                //     };
+                // }
+                // valueObjectToString = JSON.stringify(valuesObj);
+                debugger;
+                // this.localStorageService.set(GeocodingCache.TILE_LOCATIONS, valueObjectToString)
+                this.localStorageService.set(GeocodingCache.TILE_LOCATIONS, valueObjectToString)
+                    .then(() => deferred.resolve())
+                    .catch(() => deferred.reject());
             });
 
             return deferred;

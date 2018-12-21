@@ -814,6 +814,7 @@ module powerbi.extensibility.visual {
             let deferred = $.Deferred();
             let tileCachePromise: IPromise<string> = this.localStorageService.get(`${GlobeMap.TILE_STORAGE_KEY}_${language}`);
 
+            debugger;
             tileCachePromise.then(data => GlobeMap.extendTiles(data, this.currentLanguage, deferred))
                 .catch(() => this.loadFromBing(language, deferred));
 
@@ -1041,10 +1042,17 @@ module powerbi.extensibility.visual {
             if (!this.data) {
                 return;
             }
-            this.data.dataPoints.forEach(d => this.geocodeRenderDatum(d)); // all coordinates (latitude/longitude) will be gained here
-            this.data.dataPoints.forEach((d) => {
-                return d.location = this.globeMapLocationCache[d.placeKey] || d.location;
-            });
+            for (let d of this.data.dataPoints) {
+                this.geocodeRenderDatum(d);
+            }
+            debugger;
+            // this.data.dataPoints.forEach(d => this.geocodeRenderDatum(d)); // all coordinates (latitude/longitude) will be gained here
+            // this.data.dataPoints.forEach((d) => {
+            //     return d.location = this.globeMapLocationCache[d.placeKey] || d.location;
+            // });
+            for (let d of this.data.dataPoints) {
+                d.location = this.globeMapLocationCache[d.placeKey] || d.location;
+            }
             if (!this.readyToRender) {
                 this.defferedRender();
                 return;

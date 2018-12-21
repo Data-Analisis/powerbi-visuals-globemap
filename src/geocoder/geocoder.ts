@@ -663,8 +663,10 @@ module powerbi.extensibility.geocoder {
                         entry.item.deferred.reject(result && result.error || new Error('cancelled'));
                     }
                     else {
-                        GeocodeCacheManager.registerCoordinates(entry.item.query.getKey(), result.coordinates);
-                        entry.item.deferred.resolve(result.coordinates);
+                        GeocodeCacheManager.registerCoordinates(entry.item.query.getKey(), result.coordinates)
+                            .then(() => {
+                                entry.item.deferred.resolve(result.coordinates);
+                            });
                     }
                 }
             }
@@ -762,7 +764,7 @@ module powerbi.extensibility.geocoder {
             }
         }
 
-        export function registerCoordinates(key: string, coordinates: IGeocodeCoordinate | IGeocodeBoundaryCoordinate): void {
+        export function registerCoordinates(key: string, coordinates: IGeocodeCoordinate | IGeocodeBoundaryCoordinate): JQueryPromise<{}> {
             if (key) {
                 return ensureCache().registerCoordinates(key, coordinates);
             }
@@ -770,6 +772,11 @@ module powerbi.extensibility.geocoder {
 
         export function reset(cache: IGeocodingCache) {
             geocodingCache = cache;
+        }
+
+        export function updateStorage() {
+            // smth like this
+            //ensureCache().registerCoordinates();
         }
     }
 
