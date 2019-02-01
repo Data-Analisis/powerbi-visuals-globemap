@@ -16,8 +16,8 @@ export class CacheManager {
     private localStorageCache: ICacheManager;
     private bingCache: ICacheManager;
 
-    private needToBeLoaded: { [i: string]: boolean };
-    private localStorageCoordinates: ILocationDictionary;
+    //private needToBeLoaded: { [i: string]: boolean };
+    private coordsInLocalStorage: ILocationDictionary;
 
     constructor(localStorageService: ILocalVisualStorageService) {
         this.memoryCache = new MemoryCache(CacheSettings.MaxCacheSize, CacheSettings.MaxCacheSizeOverflow);
@@ -25,21 +25,49 @@ export class CacheManager {
         this.bingCache = new BingCache()
     }
 
+    /*
     private getPlacesToBeLoaded(): string[] {
-        let result: string[] = [];
-
-        for (let keysToBeLoaded in this.needToBeLoaded) {
-            if (this.needToBeLoaded[keysToBeLoaded]) {
-                result.push(keysToBeLoaded);
-            }
-        }
-        return result;
+        const keys = Object.keys(this.needToBeLoaded);
+        return keys.filter(b => this.needToBeLoaded[b]);
     }
+    */
+        
+    
+    public async loadCoordinates(locations: []string): Promise<ILocationDictionary> {
+        var result = {};
+        // Load from memory
+        let coordsInMemory = await this.memoryCache.load(locations);   // result: [{"London": {"lat": 54, "lon": 34"},]
+        let locationsInMemory = Object.keys(coordsInMemory);           // result: ["London", "Moscow"]
+        locations = locations.filter(loc => locationsInMemory.includes(loc));  // ["Moscow"]
+        
+        if (locations.lenght === 0) {
+            result = Object.assign({}, locationsInMemory);
+            return new Promise<ILocationDictionary>(resolve => resolve(result));
+        }
+        
+        // Load from localStorage
+        if (!this.coordsInLocalStorage.length) {
+            this.coordsInLocalStorage = await this.localStorageCache.load(locations);   // result: [{"Berlin": {"lat": 54, "lon": 34"},]
+            let locationsInLocalStorage = Object.keys(this.coordsInLocalStorage);           // result: ["Berlin", "Paris"]
+            locations = locations.filter(loc => locationsInMemory.includes(loc));  // ["Moscow"]
 
-    public async loadCoordinates(data: GlobeMapData): Promise<ILocationDictionary> {
+            if (locations.lenght === 0) {
+                result = Object.assign({}, locationsInMemory, this.coordsInLocalStorage);
+                return new Promise<ILocationDictionary>(resolve => resolve(result));
+            }        
+        }
+        
+        let coordsInBing = await this.bingCache.load(locations);
+        result = Object.assign({}, locationsInMemory, this.coordsInLocalStorage, coordsInBing);
+        
+        return new Promise<ILocationDictionary>(resolve => resolve(result));   
+    }
+ 
+    /*
+    public async loadCoordinatesOLD(data: GlobeMapData): Promise<ILocationDictionary> {
         this.needToBeLoaded = {};
         let locationRecords: ILocationDictionary;
-
+   
         data.dataPoints.forEach((d: GlobeMapDataPoint) => {
             this.needToBeLoaded[d.placeKey] = true;
         });
@@ -61,8 +89,7 @@ export class CacheManager {
 
         let localStorageCoords: ILocationDictionary = {};
         if (!this.localStorageCoordinates) {
-            localStorageCoords = await this.localStorageCache.loadCoordinates(notLoadedCoordinates);
-
+            this.localStorageCoordinates = await this.localStorageCache.loadCoordinates(notLoadedCoordinates);
         } else {
             notLoadedCoordinates.forEach((key: string) => {
                 if (this.localStorageCoordinates[key]) {
@@ -85,15 +112,10 @@ export class CacheManager {
         // go to the bing!
 
     }
+    */
 
     public async saveCoordinates(coordinates: ILocationDictionary): Promise<string> {
-        try {
-            await this.memoryCache.saveCoordinates(coordinates);
-            await this.localStorageCache.saveCoordinates(coordinates);
-            return new Promise<string>(resolve => resolve("success"));
-        }
-        catch (error) {
-            return new Promise<string>((resolve, reject) => reject());
-        }
+        await this.memoryCache.saveCoordinates(coordinates);        
+        return this.localStorageCache.saveCoordinates(coordinates);        
     }
 } 
